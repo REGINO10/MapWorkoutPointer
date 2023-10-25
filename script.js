@@ -289,7 +289,6 @@ class App {
   _getLocalStorage(workouts) {
     if (workouts) {
       JSON.parse(workouts).forEach(workout => {
-        console.log(workout);
         this._createMarker(workout);
         this._addWorkoutList(workout);
         this.#workouts.push(workout);
