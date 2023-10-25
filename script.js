@@ -16,27 +16,52 @@ class Workout {
     this.distance = distance;
     this.duration = duration;
   }
+
+  _setDescription(date) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    return `${this.type} on ${months[date.getMonth()]} ${date.getDate()}`;
+  }
 }
 
 class Running extends Workout {
+  type = 'running';
+  description = this._setDescription(this.date);
   constructor(position, distance, duration, cadence) {
     super(position, distance, duration);
     this.cadence = cadence;
+    this._calcPace();
   }
 
-  calcPace() {
-    return this.duration / this.distance;
+  _calcPace() {
+    this.pace = (this.duration / this.distance).toFixed(1);
   }
 }
 
 class Cycling extends Workout {
+  type = 'cycling';
+  description = this._setDescription(this.date);
   constructor(position, distance, duration, elevation) {
     super(position, distance, duration);
     this.elevation = elevation;
+    this._calcSpeed();
   }
 
-  calcSpeed() {
-    return this.distance / (this.duration / 60);
+  _calcSpeed() {
+    this.speed = (this.distance / (this.duration / 60)).toFixed(1);
   }
 }
 
@@ -76,6 +101,8 @@ class App {
     this.#currentCoord = [latitude, longitude];
 
     this.#currentMap = L.map('map').setView(this.#currentCoord, 13);
+
+    this._getLocalStorage(localStorage.getItem('workouts'));
 
     L.tileLayer('https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
       attribution:
@@ -153,9 +180,11 @@ class App {
     form.classList.add('hidden');
     setTimeout(() => (form.style.display = 'grid'), 1000);
 
-    this._createMarker();
+    this._createMarker(this.#newWorkout);
 
-    this._addWorkoutList();
+    this._addWorkoutList(this.#newWorkout);
+
+    this._setLocalStorage();
 
     this.#workoutType = '';
     this.#clickPosition = {};
@@ -163,8 +192,8 @@ class App {
     this.#newWorkout = {};
   }
 
-  _createMarker() {
-    L.marker(this.#clickCoord)
+  _createMarker(workout) {
+    L.marker(workout.position)
       .addTo(this.#currentMap)
       .bindPopup(
         L.popup({
@@ -172,67 +201,61 @@ class App {
           minWidth: 100,
           autoClose: false,
           closeOnClick: false,
-          className: `${this.#workoutType}-popup`,
+          className: `${workout.type}-popup`,
         })
       )
-      .setPopupContent(`${this._setDescription(this.#newWorkout.date)}`)
+      .setPopupContent(`${workout.description}`)
       .openPopup();
   }
 
-  _addWorkoutList() {
-    let html = `<li class="workout workout--${this.#workoutType}" data-id="${
-      this.#newWorkout.id
+  _addWorkoutList(workout) {
+    let html = `<li class="workout workout--${workout.type}" data-id="${
+      workout.id
     }">
-    <h2 class="workout__title">${this._setDescription(
-      this.#newWorkout.date
-    )}</h2>
+    <h2 class="workout__title">${workout.description}</h2>
     <div class="workout__details">
       <span class="workout__icon">${
-        this.#workoutType === 'running' ? '🏃‍♂️' : '🚴‍♀️'
+        workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'
       }</span>
-      <span class="workout__value">${this.#newWorkout.distance}</span>
+      <span class="workout__value">${workout.distance}</span>
       <span class="workout__unit">km</span>
     </div>
     <div class="workout__details">
       <span class="workout__icon">⏱</span>
-      <span class="workout__value">${this.#newWorkout.duration}</span>
+      <span class="workout__value">${workout.duration}</span>
       <span class="workout__unit">min</span>
     </div>`;
 
-    if (this.#workoutType === 'running') {
+    if (workout.type === 'running') {
       html =
         html +
         `
       <div class="workout__details">
                 <span class="workout__icon">⚡️</span>
-                <span class="workout__value">>${this.#newWorkout
-                  .calcPace()
-                  .toFixed(1)}</span>
+                <span class="workout__value">>${workout.pace}</span>
                 <span class="workout__unit">min/km</span>
               </div>
               <div class="workout__details">
                 <span class="workout__icon">🦶🏼</span>
-                <span class="workout__value">${this.#newWorkout.cadence}</span>
+                <span class="workout__value">${workout.cadence}</span>
                 <span class="workout__unit">spm</span>
               </div>
             </li>
       `;
     }
 
-    if (this.#workoutType === 'cycling') {
+    if (workout.type === 'cycling') {
       html =
         html +
         `
       <div class="workout__details">
             <span class="workout__icon">⚡️</span>
-            <span class="workout__value">${this.#newWorkout
-              .calcSpeed()
-              .toFixed(1)}</span>
+            <span class="workout__value">${workout.speed}</span>
             <span class="workout__unit">km/h</span>
           </div>
           <div class="workout__details">
             <span class="workout__icon">⛰</span>
-            <span class="workout__value">${this.#newWorkout.elevation}</span>
+            <span class="workout__value">${workout.elevation}</span>
             <span class="workout__unit">m</span>
           </div>
         </li>
@@ -240,27 +263,6 @@ class App {
     }
 
     form.insertAdjacentHTML('afterend', html);
-  }
-
-  _setDescription(date) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return `${this.#workoutType} on ${
-      months[date.getMonth()]
-    } ${date.getDate()}`;
   }
 
   _zoom(e) {
@@ -280,12 +282,33 @@ class App {
     }
   }
 
+  _setLocalStorage() {
+    localStorage.setItem('workouts', JSON.stringify(this.#workouts));
+  }
+
+  _getLocalStorage(workouts) {
+    if (workouts) {
+      JSON.parse(workouts).forEach(workout => {
+        console.log(workout);
+        this._createMarker(workout);
+        this._addWorkoutList(workout);
+        this.#workouts.push(workout);
+        this._setLocalStorage();
+      });
+    }
+  }
+
   _numberCheck(...values) {
     return values.every(value => typeof value === 'number');
   }
 
   _positiveCheck(...values) {
     return values.every(value => value > 0);
+  }
+
+  reset() {
+    localStorage.removeItem('workouts');
+    location.reload();
   }
 }
 
